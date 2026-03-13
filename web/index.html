@@ -129,6 +129,27 @@
         }
         .meta-buttons button:active { background: #888; }
 
+        .demo-section {
+            max-width: 400px;
+            width: 100%;
+            margin-top: 16px;
+            text-align: center;
+        }
+        .demo-section p { color: #888; font-size: 0.75rem; margin-bottom: 8px; }
+        .demo-btn {
+            background: linear-gradient(135deg, #9bbc0f, #306230);
+            border: none;
+            border-radius: 8px;
+            padding: 10px 24px;
+            color: #fff;
+            font-weight: bold;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: transform 0.1s;
+        }
+        .demo-btn:hover { transform: scale(1.05); }
+        .demo-btn:active { transform: scale(0.98); }
+
         .drop-zone {
             display: flex;
             flex-direction: column;
@@ -213,6 +234,11 @@
 
 <div class="rom-title" id="rom-title"></div>
 
+<div class="demo-section" id="demo-section">
+    <p>Try the built-in demo game:</p>
+    <button class="demo-btn" id="demo-breakout">Play Breakout</button>
+</div>
+
 <div class="drop-zone" id="drop-zone">
     <div class="icon">&#128190;</div>
     <p>Drop a .gb ROM file here<br>or click to select</p>
@@ -255,6 +281,7 @@ await init();
 // ROM loading
 const dropZone = document.getElementById('drop-zone');
 const romInput = document.getElementById('rom-input');
+const demoSection = document.getElementById('demo-section');
 
 dropZone.addEventListener('click', () => romInput.click());
 dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
@@ -262,22 +289,32 @@ dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-ove
 dropZone.addEventListener('drop', e => {
     e.preventDefault();
     dropZone.classList.remove('drag-over');
-    if (e.dataTransfer.files.length > 0) loadRom(e.dataTransfer.files[0]);
+    if (e.dataTransfer.files.length > 0) loadRomFile(e.dataTransfer.files[0]);
 });
 romInput.addEventListener('change', e => {
-    if (e.target.files.length > 0) loadRom(e.target.files[0]);
+    if (e.target.files.length > 0) loadRomFile(e.target.files[0]);
 });
 
-async function loadRom(file) {
-    const buffer = await file.arrayBuffer();
-    const rom = new Uint8Array(buffer);
+// Demo button
+document.getElementById('demo-breakout').addEventListener('click', async () => {
+    const resp = await fetch('./breakout.gb');
+    const buffer = await resp.arrayBuffer();
+    startEmulator(new Uint8Array(buffer), 'Breakout');
+});
 
+async function loadRomFile(file) {
+    const buffer = await file.arrayBuffer();
+    startEmulator(new Uint8Array(buffer), file.name);
+}
+
+function startEmulator(rom, name) {
     if (animId) cancelAnimationFrame(animId);
     gb = new OxiBoy(rom);
     running = true;
     led.classList.add('on');
-    titleEl.textContent = gb.title() || file.name;
+    titleEl.textContent = gb.title() || name;
     dropZone.style.display = 'none';
+    demoSection.style.display = 'none';
     frameCount = 0;
     lastFpsTime = performance.now();
     requestAnimationFrame(emulationLoop);
@@ -305,24 +342,24 @@ function emulationLoop(timestamp) {
     animId = requestAnimationFrame(emulationLoop);
 }
 
-// Keyboard input
+// Keyboard input — map browser keys to WASM key strings
 const keyMap = {
-    'ArrowUp': 'up', 'ArrowDown': 'down', 'ArrowLeft': 'left', 'ArrowRight': 'right',
-    'z': 'a', 'Z': 'a', 'x': 'b', 'X': 'b',
-    'Enter': 'start', 'Shift': 'select',
+    'ArrowUp': 'ArrowUp', 'ArrowDown': 'ArrowDown', 'ArrowLeft': 'ArrowLeft', 'ArrowRight': 'ArrowRight',
+    'z': 'z', 'Z': 'z', 'x': 'x', 'X': 'x',
+    'Enter': 'Enter', 'Shift': 'Shift',
 };
 
 document.addEventListener('keydown', e => {
     if (!gb) return;
-    const btn = keyMap[e.key];
-    if (btn) { e.preventDefault(); gb.press(btn === 'a' ? 'z' : btn === 'b' ? 'x' : btn === 'start' ? 'Enter' : btn === 'select' ? 'Shift' : 'Arrow' + btn.charAt(0).toUpperCase() + btn.slice(1)); }
+    const key = keyMap[e.key];
+    if (key) { e.preventDefault(); gb.press(key); }
     if (e.key === ' ') { e.preventDefault(); running = !running; if (running) requestAnimationFrame(emulationLoop); }
 });
 
 document.addEventListener('keyup', e => {
     if (!gb) return;
-    const btn = keyMap[e.key];
-    if (btn) { e.preventDefault(); gb.release(btn === 'a' ? 'z' : btn === 'b' ? 'x' : btn === 'start' ? 'Enter' : btn === 'select' ? 'Shift' : 'Arrow' + btn.charAt(0).toUpperCase() + btn.slice(1)); }
+    const key = keyMap[e.key];
+    if (key) { e.preventDefault(); gb.release(key); }
 });
 
 // Touch/mouse controls for on-screen buttons
