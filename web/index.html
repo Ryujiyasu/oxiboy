@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OxiBoy — Game Boy Emulator</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #1a1a2e;
+            color: #e0e0e0;
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        h1 {
+            font-size: 2rem;
+            margin: 10px 0;
+            background: linear-gradient(135deg, #9bbc0f, #0f380f);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .subtitle { color: #888; font-size: 0.85rem; margin-bottom: 20px; }
+
+        .gb-shell {
+            background: linear-gradient(145deg, #c8c4be, #a8a4a0);
+            border-radius: 16px 16px 16px 60px;
+            padding: 20px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+            max-width: 400px;
+            width: 100%;
+        }
+        .screen-bezel {
+            background: #4a4a5a;
+            border-radius: 8px;
+            padding: 16px 24px;
+            margin-bottom: 16px;
+        }
+        .screen-label {
+            color: #888;
+            font-size: 0.65rem;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-bottom: 6px;
+        }
+        .power-led {
+            display: inline-block;
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #333;
+            margin-right: 6px;
+            vertical-align: middle;
+        }
+        .power-led.on { background: #9bbc0f; box-shadow: 0 0 6px #9bbc0f; }
+
+        canvas {
+            display: block;
+            width: 100%;
+            image-rendering: pixelated;
+            background: #0f380f;
+            border-radius: 4px;
+        }
+
+        .controls {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0;
+        }
+        .dpad {
+            display: grid;
+            grid-template: 36px 36px 36px / 36px 36px 36px;
+            gap: 2px;
+        }
+        .dpad button {
+            background: #2a2a2a;
+            border: none;
+            border-radius: 4px;
+            color: #888;
+            font-size: 1rem;
+            cursor: pointer;
+            touch-action: none;
+        }
+        .dpad button:active { background: #444; }
+        .dpad .center { background: transparent; cursor: default; }
+
+        .ab-buttons {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            transform: rotate(-15deg);
+        }
+        .ab-buttons button {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            background: #8b1a4a;
+            border: none;
+            color: #fff;
+            font-weight: bold;
+            font-size: 0.9rem;
+            cursor: pointer;
+            box-shadow: 0 3px 0 #5a0030;
+            touch-action: none;
+        }
+        .ab-buttons button:active { box-shadow: 0 1px 0 #5a0030; transform: translateY(2px); }
+
+        .meta-buttons {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin-top: 8px;
+        }
+        .meta-buttons button {
+            background: #666;
+            border: none;
+            border-radius: 12px;
+            padding: 6px 16px;
+            color: #ddd;
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            cursor: pointer;
+            transform: rotate(-8deg);
+            touch-action: none;
+        }
+        .meta-buttons button:active { background: #888; }
+
+        .drop-zone {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            max-width: 400px;
+            margin-top: 20px;
+            padding: 30px;
+            border: 2px dashed #444;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: border-color 0.2s;
+        }
+        .drop-zone:hover, .drop-zone.drag-over { border-color: #9bbc0f; }
+        .drop-zone p { color: #888; font-size: 0.9rem; }
+        .drop-zone .icon { font-size: 2rem; margin-bottom: 8px; }
+
+        .info {
+            max-width: 400px;
+            width: 100%;
+            margin-top: 16px;
+            font-size: 0.75rem;
+            color: #666;
+            text-align: center;
+        }
+        .rom-title {
+            text-align: center;
+            font-size: 0.8rem;
+            color: #9bbc0f;
+            margin-top: 8px;
+            font-weight: bold;
+        }
+        .key-help {
+            max-width: 400px;
+            width: 100%;
+            margin-top: 12px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 4px;
+            font-size: 0.7rem;
+            color: #666;
+        }
+        .key-help span { background: #222; padding: 3px 6px; border-radius: 4px; }
+        .fps { position: fixed; top: 8px; right: 12px; font-size: 0.75rem; color: #666; }
+    </style>
+</head>
+<body>
+
+<h1>OxiBoy</h1>
+<p class="subtitle">Game Boy Emulator — Rust + WebAssembly</p>
+
+<div class="gb-shell">
+    <div class="screen-bezel">
+        <div class="screen-label"><span class="power-led" id="led"></span>DOT MATRIX WITH STEREO SOUND</div>
+        <canvas id="screen" width="160" height="144"></canvas>
+    </div>
+
+    <div class="controls">
+        <div class="dpad">
+            <div></div>
+            <button id="btn-up">&#9650;</button>
+            <div></div>
+            <button id="btn-left">&#9664;</button>
+            <div class="center"></div>
+            <button id="btn-right">&#9654;</button>
+            <div></div>
+            <button id="btn-down">&#9660;</button>
+            <div></div>
+        </div>
+        <div class="ab-buttons">
+            <button id="btn-b">B</button>
+            <button id="btn-a">A</button>
+        </div>
+    </div>
+
+    <div class="meta-buttons">
+        <button id="btn-select">SELECT</button>
+        <button id="btn-start">START</button>
+    </div>
+</div>
+
+<div class="rom-title" id="rom-title"></div>
+
+<div class="drop-zone" id="drop-zone">
+    <div class="icon">&#128190;</div>
+    <p>Drop a .gb ROM file here<br>or click to select</p>
+    <input type="file" id="rom-input" accept=".gb,.gbc,.rom,.bin" style="display:none">
+</div>
+
+<div class="key-help">
+    <span>Arrow Keys = D-Pad</span>
+    <span>Z = A Button</span>
+    <span>X = B Button</span>
+    <span>Enter = Start</span>
+    <span>Shift = Select</span>
+    <span>Space = Pause</span>
+</div>
+
+<div class="info">
+    Powered by Rust + WebAssembly. ROMs run entirely in your browser — nothing is uploaded.
+</div>
+
+<div class="fps" id="fps"></div>
+
+<script type="module">
+import init, { OxiBoy } from './pkg/oxiboy_wasm.js';
+
+let gb = null;
+let running = false;
+let animId = null;
+let frameCount = 0;
+let lastFpsTime = 0;
+
+const canvas = document.getElementById('screen');
+const ctx = canvas.getContext('2d');
+const led = document.getElementById('led');
+const fpsEl = document.getElementById('fps');
+const titleEl = document.getElementById('rom-title');
+
+// Initialize WASM
+await init();
+
+// ROM loading
+const dropZone = document.getElementById('drop-zone');
+const romInput = document.getElementById('rom-input');
+
+dropZone.addEventListener('click', () => romInput.click());
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+dropZone.addEventListener('drop', e => {
+    e.preventDefault();
+    dropZone.classList.remove('drag-over');
+    if (e.dataTransfer.files.length > 0) loadRom(e.dataTransfer.files[0]);
+});
+romInput.addEventListener('change', e => {
+    if (e.target.files.length > 0) loadRom(e.target.files[0]);
+});
+
+async function loadRom(file) {
+    const buffer = await file.arrayBuffer();
+    const rom = new Uint8Array(buffer);
+
+    if (animId) cancelAnimationFrame(animId);
+    gb = new OxiBoy(rom);
+    running = true;
+    led.classList.add('on');
+    titleEl.textContent = gb.title() || file.name;
+    dropZone.style.display = 'none';
+    frameCount = 0;
+    lastFpsTime = performance.now();
+    requestAnimationFrame(emulationLoop);
+}
+
+function emulationLoop(timestamp) {
+    if (!running || !gb) return;
+
+    gb.run_frame();
+
+    // Render framebuffer to canvas
+    const fb = gb.framebuffer();
+    const imageData = ctx.createImageData(160, 144);
+    imageData.data.set(fb);
+    ctx.putImageData(imageData, 0, 0);
+
+    // FPS counter
+    frameCount++;
+    if (timestamp - lastFpsTime >= 1000) {
+        fpsEl.textContent = `${frameCount} FPS`;
+        frameCount = 0;
+        lastFpsTime = timestamp;
+    }
+
+    animId = requestAnimationFrame(emulationLoop);
+}
+
+// Keyboard input
+const keyMap = {
+    'ArrowUp': 'up', 'ArrowDown': 'down', 'ArrowLeft': 'left', 'ArrowRight': 'right',
+    'z': 'a', 'Z': 'a', 'x': 'b', 'X': 'b',
+    'Enter': 'start', 'Shift': 'select',
+};
+
+document.addEventListener('keydown', e => {
+    if (!gb) return;
+    const btn = keyMap[e.key];
+    if (btn) { e.preventDefault(); gb.press(btn === 'a' ? 'z' : btn === 'b' ? 'x' : btn === 'start' ? 'Enter' : btn === 'select' ? 'Shift' : 'Arrow' + btn.charAt(0).toUpperCase() + btn.slice(1)); }
+    if (e.key === ' ') { e.preventDefault(); running = !running; if (running) requestAnimationFrame(emulationLoop); }
+});
+
+document.addEventListener('keyup', e => {
+    if (!gb) return;
+    const btn = keyMap[e.key];
+    if (btn) { e.preventDefault(); gb.release(btn === 'a' ? 'z' : btn === 'b' ? 'x' : btn === 'start' ? 'Enter' : btn === 'select' ? 'Shift' : 'Arrow' + btn.charAt(0).toUpperCase() + btn.slice(1)); }
+});
+
+// Touch/mouse controls for on-screen buttons
+const buttonMap = {
+    'btn-up': 'ArrowUp', 'btn-down': 'ArrowDown', 'btn-left': 'ArrowLeft', 'btn-right': 'ArrowRight',
+    'btn-a': 'z', 'btn-b': 'x', 'btn-start': 'Enter', 'btn-select': 'Shift',
+};
+
+for (const [id, key] of Object.entries(buttonMap)) {
+    const el = document.getElementById(id);
+    el.addEventListener('mousedown', e => { e.preventDefault(); if (gb) gb.press(key); });
+    el.addEventListener('mouseup', e => { e.preventDefault(); if (gb) gb.release(key); });
+    el.addEventListener('mouseleave', e => { if (gb) gb.release(key); });
+    el.addEventListener('touchstart', e => { e.preventDefault(); if (gb) gb.press(key); });
+    el.addEventListener('touchend', e => { e.preventDefault(); if (gb) gb.release(key); });
+}
+</script>
+</body>
+</html>

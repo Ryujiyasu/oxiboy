@@ -1,0 +1,6 @@
+[package]
+name = "oxiboy-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Game Boy emulator core — CPU, PPU, APU, memory"
